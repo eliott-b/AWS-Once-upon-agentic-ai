@@ -94,7 +94,6 @@ try:
     A2A_AGENT_URLS = [
         "http://127.0.0.1:8000",
         "http://127.0.0.1:8001",
-        "http://127.0.0.1:8080",
     ]
     provider = A2AClientToolProvider(known_agent_urls=A2A_AGENT_URLS)
 
