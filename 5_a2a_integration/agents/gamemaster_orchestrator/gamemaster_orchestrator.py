@@ -21,32 +21,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 class QuestionRequest(BaseModel):
     question: str
+
 
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
 
+
 @app.get("/messages")
 def get_messages():
     return agent.messages
 
+
 @app.get("/user/{user_name}")
 def get_user(user_name):
-    characters_db = TinyDB('./../character_agent/characters.json')
+    characters_db = TinyDB("./../character_agent/characters.json")
     Character_Query = Query()
     result = characters_db.search(Character_Query.name == user_name)
     if not result:
         return f":x: Character with name '{user_name}' not found"
-    
+
     character = result[0]
-    print(f"✅ Found character: {character['name']} (ID: {character['character_id']}, {character['character_class']} {character['race']})")
+    print(
+        f"✅ Found character: {character['name']} (ID: {character['character_id']}, {character['character_class']} {character['race']})"
+    )
     return character
 
-# TODO: Create MCP Client for dice rolling service
-# Initialize MCPClient with a lambda that returns streamablehttp_client("http://localhost:8080/mcp")
-mcp_client = None
+
+mcp_client = MCPClient(lambda: streamablehttp_client("http://127.0.0.1:8080/mcp"))
 
 # System prompt for the agent
 SYSTEM_PROMPT = """You are a D&D Game Master orchestrator with access to specialized agents and tools.
@@ -86,35 +91,38 @@ Remember, the response should ONLY be a PURE json with no markdown or text aroun
 """
 
 try:
-    # TODO: Create the A2A client with the A2AClientToolProvider and pass the list of the known agent urls
-    A2A_AGENT_URLS = []
+    A2A_AGENT_URLS = [
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:8001",
+        "http://127.0.0.1:8080",
+    ]
+    provider = A2AClientToolProvider(known_agent_urls=A2A_AGENT_URLS)
 
     with mcp_client:
-        #TODO: Get MCP tools
+        mcp_tools = mcp_client.list_tools_sync()
 
-        #TODO: Create the gamemaster agent with both A2A and MCP tools
         agent = Agent(
-            # model=optional,
-            # tools= List of the A2A and MCP tools,
-            system_prompt=SYSTEM_PROMPT
+            system_prompt=SYSTEM_PROMPT,
+            tools=[provider.tools, mcp_tools],
         )
 except Exception as e:
     print(f"Error occurred: {str(e)}")
+
 
 @app.post("/inquire")
 async def ask_agent(request: QuestionRequest):
     print("Processing request...")
     try:
         with mcp_client:
-            
             # Process the request
             response = agent(request.question)
             content = str(response)
             return JSONResponse(content={"response": content})
-            
+
     except Exception as e:
         print(f"Error occurred: {str(e)}")
         return JSONResponse(content={"error": "Internal server error"}, status_code=500)
+
 
 if __name__ == "__main__":
     uvicorn.run(app, port=8009)
